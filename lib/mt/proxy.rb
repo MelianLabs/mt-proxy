@@ -47,11 +47,15 @@ module MT
     end
 
     def register(address_with_port, public_ip)
+      renew(address_with_port, public_ip)
+      redis.lrem("hosts", 0, address_with_port)
+      redis.lpush("hosts", address_with_port)
+    end
+
+    def renew(address_with_port, public_ip)
       guard_time = (check_interval * 1.5).round
       redis.setex("#{address_with_port}:goes_as", guard_time, public_ip)
       redis.setex("#{public_ip}:via", guard_time, address_with_port)
-      redis.lrem("hosts", 0, address_with_port)
-      redis.lpush("hosts", address_with_port)
     end
 
     def unregister(address_with_port, public_ip)

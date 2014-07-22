@@ -1,20 +1,17 @@
 # MT::Proxy
 
-TODO: Write a gem description
+  MyTime proxy checker and chooser
 
 ## Installation
 
 Add this line to your application's Gemfile:
 
-    gem 'proxy_chooser'
+    gem 'mt-proxy', github: 'vvlad/mt-proxy'
 
 And then execute:
 
     $ bundle
 
-Or install it yourself as:
-
-    $ gem install proxy_chooser
 
 ## Usage
 

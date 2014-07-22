@@ -47,8 +47,9 @@ module MT
     end
 
     def register(address_with_port, public_ip)
-      redis.setex("#{address_with_port}:goes_as", check_interval * 1.5, public_ip)
-      redis.setex("#{public_ip}:via", check_interval * 1.5, address_with_port)
+      guard_time = (check_interval * 1.5).round
+      redis.setex("#{address_with_port}:goes_as", guard_time, public_ip)
+      redis.setex("#{public_ip}:via", guard_time, address_with_port)
       redis.lrem("hosts", 0, address_with_port)
       redis.lpush("hosts", address_with_port)
     end

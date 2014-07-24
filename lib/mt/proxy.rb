@@ -32,6 +32,9 @@ module MT
     mattr_accessor :check_interval
     self.check_interval = 10.seconds
 
+    mattr_accessor :hosts_key
+    self.hosts_key = "hosts"
+
     attr :redis
 
     def redis=(connection)
@@ -48,9 +51,8 @@ module MT
 
     def register(address_with_port, public_ip)
       renew(address_with_port, public_ip)
-      key = ENV["NOVPN"] ? "no-vpn-hosts" : "hosts"
-      redis.lrem(key, 0, address_with_port)
-      redis.lpush(key, address_with_port)
+      redis.lrem(hosts_key, 0, address_with_port)
+      redis.lpush(hosts_key, address_with_port)
     end
 
     def renew(address_with_port, public_ip)
@@ -60,8 +62,7 @@ module MT
     end
 
     def unregister(address_with_port, public_ip)
-      key = ENV["NOVPN"] ? "no-vpn-hosts" : "hosts"
-      redis.lrem key, 0, address_with_port
+      redis.lrem hosts_key, 0, address_with_port
       redis.del "#{address_with_port}:goes_as", "#{public_ip}:via"
     end
 

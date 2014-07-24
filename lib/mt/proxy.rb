@@ -33,7 +33,7 @@ module MT
     self.check_interval = 10.seconds
 
     mattr_accessor :hosts_key
-    self.hosts_key = "hosts"
+    self.hosts_key = "no-vpn-hosts"
 
     attr :redis
 
@@ -41,8 +41,8 @@ module MT
       @redis = Redis::Namespace.new(namespace, :redis => connection)
     end
 
-    def pick
-      if proxy = new_proxy
+    def pick(options = {})
+      if proxy = new_proxy(options)
         return proxy
       end
 
@@ -67,14 +67,14 @@ module MT
     end
 
 
-    def pick_for(*context)
-      key = Digest::SHA1.hexdigest(context.to_json)
+    def pick_for(options = {})
+      key = Digest::SHA1.hexdigest(options[:context].to_json)
 
       if proxy = recently_used_proxy_for(key)
         return proxy
       end
 
-      if proxy = new_association_for(key)
+      if proxy = new_association_for(key, options)
         return proxy
       end
       raise(NoProxyError, "No proxy registered at `#{redis.inspect}'")
@@ -82,15 +82,15 @@ module MT
 
     private
 
-    def new_proxy
-      key = Thread.current[:worker_process] ? "no-vpn-hosts" : "hosts"
+    def new_proxy(options)
+      key = options[:use_vpn] ? "hosts" : "no-vpn-hosts"
       if proxy = redis.rpoplpush(key, key)
         return URI.parse("http://#{proxy}")
       end
     end
 
-    def new_association_for(key)
-      if proxy = new_proxy
+    def new_association_for(key, options)
+      if proxy = new_proxy(options)
         public_ip = redis.get("#{proxy.host}:#{proxy.port}:goes_as")
         redis.setex("#{key}:via", association_ttl, public_ip)
         proxy

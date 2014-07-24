@@ -4,7 +4,7 @@ describe MT::Proxy do
 
   let(:cache) { MT::Proxy.redis.data }
   let(:namespace) { MT::Proxy.namespace }
-  let(:hosts_cache) { cache["#{namespace}:hosts"] }
+  let(:hosts_cache) { cache["#{namespace}:no-vpn-hosts"] }
 
   describe ".register" do
 
@@ -25,7 +25,7 @@ describe MT::Proxy do
     end
 
     it "should remove the garbage from the list" do
-      cache["#{namespace}:hosts"] << proxy_address
+      cache["#{namespace}:no-vpn-hosts"] << proxy_address
       MT::Proxy.register proxy_address, public_address
       expect(hosts_cache).to include(proxy_address)
 
@@ -83,13 +83,13 @@ describe MT::Proxy do
   describe ".pick_for(something)" do
 
     it "should return an URI" do
-      expect(subject.pick_for('something')).to be_an URI
+      expect(subject.pick_for(:context => 'something')).to be_an URI
     end
 
     it "should raise an error if no proxy is available" do
 
       unregister_first_proxy
-      expect{subject.pick_for('something')}.to raise_error(MT::Proxy::NoProxyError)
+      expect{subject.pick_for(:context => 'something')}.to raise_error(MT::Proxy::NoProxyError)
 
     end
 
@@ -101,14 +101,14 @@ describe MT::Proxy do
       before { register_second_proxy }
 
       it "should get the same proxy each time I'm using the same context" do
-        expect(subject.pick_for(context)).to eq(subject.pick_for(context))
+        expect(subject.pick_for(:context => context)).to eq(subject.pick_for(:context => context))
       end
 
       it "should not get the same proxy if the association_ttl has expired" do
 
-        proxy = subject.pick_for(context)
+        proxy = subject.pick_for(:context => context)
         Timecop.travel MT::Proxy.association_ttl.from_now + 1.second
-        expect(proxy).not_to eq(subject.pick_for(context))
+        expect(proxy).not_to eq(subject.pick_for(:context => context))
 
       end
 

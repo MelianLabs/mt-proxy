@@ -48,8 +48,9 @@ module MT
 
     def register(address_with_port, public_ip)
       renew(address_with_port, public_ip)
-      redis.lrem("hosts", 0, address_with_port)
-      redis.lpush("hosts", address_with_port)
+      key = ENV["NOVPN"] ? "no-vpn-hosts" : "hosts"
+      redis.lrem(key, 0, address_with_port)
+      redis.lpush(key, address_with_port)
     end
 
     def renew(address_with_port, public_ip)
@@ -59,7 +60,8 @@ module MT
     end
 
     def unregister(address_with_port, public_ip)
-      redis.lrem "hosts", 0, address_with_port
+      key = ENV["NOVPN"] ? "no-vpn-hosts" : "hosts"
+      redis.lrem key, 0, address_with_port
       redis.del "#{address_with_port}:goes_as", "#{public_ip}:via"
     end
 
@@ -80,7 +82,8 @@ module MT
     private
 
     def new_proxy
-      if proxy = redis.rpoplpush("hosts", "hosts")
+      key = Thread.current[:worker_process] ? "no-vpn-hosts" : "hosts"
+      if proxy = redis.rpoplpush(key, key)
         return URI.parse("http://#{proxy}")
       end
     end

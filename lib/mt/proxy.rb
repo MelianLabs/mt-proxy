@@ -35,18 +35,34 @@ module MT
     mattr_accessor :hosts_key
     self.hosts_key = "no-vpn-hosts"
 
+    mattr_accessor :max_retrys
+    self.max_retrys = 5
+
     attr :redis
 
     def redis=(connection)
       @redis = Redis::Namespace.new(namespace, :redis => connection)
     end
 
-    def pick(options = {})
-      if proxy = new_proxy(options)
-        return proxy
+    def pick(options={})
+      key = options[:use_vpn] ? "hosts" : "no-vpn-hosts"
+      count = 0
+
+      begin
+
+        if proxy = redis.rpoplpush(key, key)
+          return URI.parse("http://#{proxy}") if redis.get("#{proxy}:goes_as")
+          redis.lrem hosts_key, 0, proxy
+        end
+
+        raise(NoProxyError, "No proxy registered at `#{redis.inspect}'")
+
+      rescue NoProxyError => e
+        count +=1
+        raise e if max_retrys < count
+        retry
       end
 
-      raise(NoProxyError, "No proxy registered at `#{redis.inspect}'")
     end
 
     def register(address_with_port, public_ip)
@@ -74,23 +90,14 @@ module MT
         return proxy
       end
 
-      if proxy = new_association_for(key, options)
-        return proxy
-      end
-      raise(NoProxyError, "No proxy registered at `#{redis.inspect}'")
+      new_association_for(key, options)
     end
 
     private
 
-    def new_proxy(options)
-      key = options[:use_vpn] ? "hosts" : "no-vpn-hosts"
-      if proxy = redis.rpoplpush(key, key)
-        return URI.parse("http://#{proxy}")
-      end
-    end
 
     def new_association_for(key, options)
-      if proxy = new_proxy(options)
+      if proxy = pick(options)
         public_ip = redis.get("#{proxy.host}:#{proxy.port}:goes_as")
         redis.setex("#{key}:via", association_ttl, public_ip)
         proxy

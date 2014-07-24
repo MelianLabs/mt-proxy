@@ -23,6 +23,12 @@ class CLI < Thor
 
   end
 
+  desc "shell", "stars a shell"
+  def shell
+    db = redis
+    pry MT::Proxy
+  end
+
 
 
   private

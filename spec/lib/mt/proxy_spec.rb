@@ -96,6 +96,7 @@ describe MT::Proxy do
 
     context "preserving the outgoing ip addres" do
 
+      before { MT::Proxy.check_interval = 10.minutes }
       let(:context) { "a list of arguments that are not nil. may be anything that is serializable" }
 
       before { register_second_proxy }
@@ -105,7 +106,6 @@ describe MT::Proxy do
       end
 
       it "should not get the same proxy if the association_ttl has expired" do
-
         proxy = subject.pick_for(:context => context)
         Timecop.travel MT::Proxy.association_ttl.from_now + 1.second
         expect(proxy).not_to eq(subject.pick_for(:context => context))

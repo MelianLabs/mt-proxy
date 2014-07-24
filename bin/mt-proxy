@@ -14,17 +14,23 @@ class CLI < Thor
 
   def status
     db = redis
-    proxies = db.lrange "hosts", 0, -1
-    status = proxies.each_with_object({}) do |proxy,info|
-      public_address = db.get("#{proxy}:goes_as")
-      info[proxy] = { public_address: public_address }
+    status = {}
+    %w[hosts no-vpn-hosts].each do |group|
+      proxies = db.lrange group, 0, -1
+      proxies.each_with_object(status) do |proxy,info|
+        public_address = db.get("#{proxy}:goes_as")
+        info[proxy] = {
+          public_address: public_address,
+          group: group
+        }
+      end
     end
     puts JSON.pretty_generate(status)
 
   end
 
-  desc "shell", "stars a shell"
-  def shell
+  desc "console", "stars a shell"
+  def console
     db = redis
     pry MT::Proxy
   end

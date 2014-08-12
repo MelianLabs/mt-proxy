@@ -23,36 +23,66 @@ module MT
     class NoProxyError < RuntimeError
     end
 
+    #this is the default namespace
     mattr_accessor :namespace
     self.namespace = "proxy"
 
+    #the default association time for a proxy
     mattr_accessor :association_ttl
     self.association_ttl = 3.minutes
 
     mattr_accessor :check_interval
     self.check_interval = 10.seconds
 
-    mattr_accessor :hosts_key
-    self.hosts_key = "no-vpn-hosts"
+    #the current proxy group
+    mattr_accessor :pool
+    self.pool = "default-pool"
+
+  #the current proxy group
+    mattr_accessor :default_pool
+    self.default_pool = pool
 
     mattr_accessor :max_retrys
     self.max_retrys = 5
+    @redis_uri = "redis://localhost"
 
-    attr :redis
-
-    def redis=(connection)
-      @redis = Redis::Namespace.new(namespace, :redis => connection)
+    # It sets the redis registry
+    # connection_or_string can be a Redis instance or a redis uri
+    #
+    #  MT::Proxy.redis = Redis.new("redis://localhost")
+    #  MT::Proxy.redis = "redis://localhost"
+    #
+    def redis=(connection_or_string)
+      if connection_or_string.is_a? String
+        @redis_uri  = connection_or_string
+      else
+        @redis = Redis::Namespace.new(namespace, :redis => connection_or_string)
+      end
     end
 
+    def redis # :nodoc:
+      @redis ||= Redis::Namespace.new(namespace, :redis => Redis.new(url: @redis_uri || "redis://127.0.0.1" ))
+    end
+
+    # Picks a proxy from a pools of proxies.
+    # Using the default pool MT::Proxy.default_pool
+    #
+    #   MT::Proxy.pick # => URI::HTTP
+    #
+    # Specifing a pool
+    #
+    #   MT::Proxy.pick pool: 'pool' # => URI::HTTP
+    #
+    # If no proxy is registered in the pool MT::Proxy::NoProxyErorr is raised
     def pick(options={})
-      key = options[:use_vpn] ? "hosts" : "no-vpn-hosts"
+      pool = options.fetch(:pool, default_pool)
       count = 0
 
       begin
 
-        if proxy = redis.rpoplpush(key, key)
+        if proxy = redis.rpoplpush(pool, pool)
           return URI.parse("http://#{proxy}") if redis.get("#{proxy}:goes_as")
-          redis.lrem hosts_key, 0, proxy
+          redis.lrem pool, 0, proxy
         end
 
         raise(NoProxyError, "No proxy registered at `#{redis.inspect}'")
@@ -65,24 +95,19 @@ module MT
 
     end
 
-    def register(address_with_port, public_ip)
-      renew(address_with_port, public_ip)
-      redis.lrem(hosts_key, 0, address_with_port)
-      redis.lpush(hosts_key, address_with_port)
-    end
-
-    def renew(address_with_port, public_ip)
-      guard_time = (check_interval * 1.5).round
-      redis.setex("#{address_with_port}:goes_as", guard_time, public_ip)
-      redis.setex("#{public_ip}:via", guard_time, address_with_port)
-    end
-
-    def unregister(address_with_port, public_ip)
-      redis.lrem hosts_key, 0, address_with_port
-      redis.del "#{address_with_port}:goes_as", "#{public_ip}:via"
-    end
-
-
+    #
+    # Picks a proxy from a pool of proxies taking in consideration a context.
+    # For successive invocations of this method if the context is the same with a previous invocation the same proxy will be returned.
+    #
+    # MT::Proxy.pick_for context: { username: 'some user', password: 'some password hash' } # => URI::HTTP
+    #
+    # the context option can be any object that is serializable into json
+    #
+    # Picking a proxy from a specified pool
+    #
+    # MT::Proxy.pick_for pool: 'a given pool', context: { username: 'some user', password: 'some password hash' } # => URI::HTTP
+    #
+    # If no proxy is registered in the pool MT::Proxy::NoProxyErorr is raised
     def pick_for(options = {})
       key = Digest::SHA1.hexdigest(options[:context].to_json)
 
@@ -93,10 +118,31 @@ module MT
       new_association_for(key, options)
     end
 
+    # Registers a proxy
+    def register(address_with_port, public_ip)
+      renew(address_with_port, public_ip)
+      redis.lrem(pool, 0, address_with_port)
+      redis.lpush(pool, address_with_port)
+    end
+
+    # Renew a proxy
+    # This method also sets an expiration time so if no renewal is made in until the expiration deadline the proxy is removed from the pool
+    def renew(address_with_port, public_ip)
+      guard_time = (check_interval * 1.5).round
+      redis.setex("#{address_with_port}:goes_as", guard_time, public_ip)
+      redis.setex("#{public_ip}:via", guard_time, address_with_port)
+    end
+
+    # Unregisters a proxy from a pool
+    def unregister(address_with_port, public_ip)
+      redis.lrem pool, 0, address_with_port
+      redis.del "#{address_with_port}:goes_as", "#{public_ip}:via"
+    end
+
     private
 
 
-    def new_association_for(key, options)
+    def new_association_for(key, options) # :nodoc:
       if proxy = pick(options)
         public_ip = redis.get("#{proxy.host}:#{proxy.port}:goes_as")
         redis.setex("#{key}:via", association_ttl, public_ip)
@@ -105,7 +151,7 @@ module MT
     end
 
 
-    def recently_used_proxy_for(key)
+    def recently_used_proxy_for(key) # :nodoc:
 
       if public_ip = redis.get("#{key}:via") and proxy = redis.get("#{public_ip}:via")
         return URI.parse("http://#{proxy}")

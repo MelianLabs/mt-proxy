@@ -4,12 +4,17 @@ describe MT::Proxy do
 
   let(:cache) { MT::Proxy.redis.data }
   let(:namespace) { MT::Proxy.namespace }
-  let(:hosts_cache) { cache["#{namespace}:no-vpn-hosts"] }
+  let(:hosts_cache) { cache["#{namespace}:#{MT::Proxy.pool}"] }
+
+  let(:proxy) { unused_proxy }
+  before { register_proxy proxy }
 
   describe ".register" do
 
-    let(:proxy_address) { "127.0.0.2:3128" }
-    let(:public_address) { "0.0.1.1" }
+    let(:other_proxy) { unused_proxy }
+    let(:proxy_address) { other_proxy[:proxy_address]}
+    let(:public_address) { other_proxy[:public_address]}
+
 
     it "should register the proxy_address->public_address mapping" do
       expect{ MT::Proxy.register proxy_address, public_address  }.to change{ cache["#{namespace}:#{proxy_address}:goes_as"] }.to(public_address)
@@ -25,8 +30,8 @@ describe MT::Proxy do
     end
 
     it "should remove the garbage from the list" do
-      cache["#{namespace}:no-vpn-hosts"] << proxy_address
-      MT::Proxy.register proxy_address, public_address
+      cache["#{namespace}:#{MT::Proxy.pool}"] << proxy_address
+      register_proxy other_proxy
       expect(hosts_cache).to include(proxy_address)
 
       host_count = hosts_cache.select{|ip| ip == proxy_address }.count
@@ -56,26 +61,39 @@ describe MT::Proxy do
 
   end
 
-
-  before { register_first_proxy }
-
   describe ".pick" do
 
     its(:pick) { should be_an URI }
 
     it "should shuffle the list" do
 
-      register_second_proxy
+      register_proxy unused_proxy
       expect(subject.pick).not_to eq(subject.pick)
 
     end
 
     it "should raise an error if no proxy is available" do
 
-      unregister_first_proxy
+      unregister_proxy proxy
       expect{subject.pick}.to raise_error(MT::Proxy::NoProxyError)
 
     end
+
+    context "from a pool" do
+
+      let(:pool) { "some other pool name"}
+      let(:other_proxy) { unused_proxy.merge(pool: pool) }
+      let(:pool_hosts_cache) { cache["#{namespace}:#{pool}"] }
+      before { register_proxy  other_proxy }
+
+      focus "should not pick a proxy from other pool" do
+        proxy = subject.pick pool: pool
+        expect(hosts_cache).not_to include("#{proxy.host}:#{proxy.port}")
+        expect(pool_hosts_cache).to include("#{proxy.host}:#{proxy.port}")
+      end
+
+    end
+
 
   end
 
@@ -88,10 +106,26 @@ describe MT::Proxy do
 
     it "should raise an error if no proxy is available" do
 
-      unregister_first_proxy
+      unregister_proxy proxy
       expect{subject.pick_for(:context => 'something')}.to raise_error(MT::Proxy::NoProxyError)
 
     end
+
+    context "from a pool" do
+
+      let(:pool) { "some other pool name"}
+      let(:other_proxy) { unused_proxy.merge(pool: pool) }
+      let(:pool_hosts_cache) { cache["#{namespace}:#{pool}"] }
+      before { register_proxy  other_proxy }
+
+      focus "should not pick a proxy from other pool" do
+        proxy = subject.pick_for pool: pool
+        expect(hosts_cache).not_to include("#{proxy.host}:#{proxy.port}")
+        expect(pool_hosts_cache).to include("#{proxy.host}:#{proxy.port}")
+      end
+
+    end
+
 
 
     context "preserving the outgoing ip addres" do
@@ -99,7 +133,7 @@ describe MT::Proxy do
       before { MT::Proxy.check_interval = 10.minutes }
       let(:context) { "a list of arguments that are not nil. may be anything that is serializable" }
 
-      before { register_second_proxy }
+      before { register_proxy unused_proxy }
 
       it "should get the same proxy each time I'm using the same context" do
         expect(subject.pick_for(:context => context)).to eq(subject.pick_for(:context => context))

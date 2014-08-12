@@ -127,6 +127,7 @@ module MT
       renew(address_with_port, public_ip)
       redis.lrem(pool, 0, address_with_port)
       redis.lpush(pool, address_with_port)
+      redis.set("#{address_with_port}:registered_at", Time.now.to_i)
     end
 
     # Renew a proxy

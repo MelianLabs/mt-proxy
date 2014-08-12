@@ -38,6 +38,12 @@ describe MT::Proxy do
       expect(host_count).to eq(1)
     end
 
+    it "should set the a registration date" do
+      Timecop.freeze
+      time = Time.now.to_i.to_s
+      expect{ MT::Proxy.register proxy_address, public_address  }.to change{ cache["#{namespace}:#{proxy_address}:registered_at"] }.to(time)
+    end
+
   end
 
   describe ".unregister" do

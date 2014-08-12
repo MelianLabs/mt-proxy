@@ -95,6 +95,10 @@ module MT
 
     end
 
+
+    def metric(proxy, key, action, value=1)
+    end
+
     #
     # Picks a proxy from a pool of proxies taking in consideration a context.
     # For successive invocations of this method if the context is the same with a previous invocation the same proxy will be returned.

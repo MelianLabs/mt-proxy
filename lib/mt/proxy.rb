@@ -95,10 +95,6 @@ module MT
 
     end
 
-
-    def metric(proxy, key, action, value=1)
-    end
-
     #
     # Picks a proxy from a pool of proxies taking in consideration a context.
     # For successive invocations of this method if the context is the same with a previous invocation the same proxy will be returned.
@@ -127,6 +123,8 @@ module MT
       renew(address_with_port, public_ip)
       redis.lrem(pool, 0, address_with_port)
       redis.lpush(pool, address_with_port)
+      guard_time = (check_interval * 1.5).round
+      redis.setex("pools:#{pool}", guard_time, pool )
       redis.set("#{address_with_port}:registered_at", Time.now.to_i)
     end
 

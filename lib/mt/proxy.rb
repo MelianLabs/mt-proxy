@@ -133,6 +133,7 @@ module MT
     def renew(address_with_port, public_ip)
       guard_time = (check_interval * 1.5).round
       redis.setex("#{address_with_port}:goes_as", guard_time, public_ip)
+      redis.setex("pools:#{pool}", guard_time, pool )
       redis.setex("#{public_ip}:via", guard_time, address_with_port)
     end
 

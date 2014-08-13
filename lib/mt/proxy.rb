@@ -85,7 +85,7 @@ module MT
           redis.lrem pool, 0, proxy
         end
 
-        raise(NoProxyError, "No proxy registered at `#{redis.inspect}'")
+        raise(NoProxyError, "No proxy registered in pool `#{pool}'")
 
       rescue NoProxyError => e
         count +=1

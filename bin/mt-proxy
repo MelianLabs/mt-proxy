@@ -15,13 +15,33 @@ class CLI < Thor
   def status
     db = redis
     status = {}
-    %w[hosts no-vpn-hosts].each do |group|
-      proxies = db.lrange group, 0, -1
+
+    redis.keys("pools:*").each do |pool|
+      pool.gsub!(/^pools:/,'')
+      proxies = db.lrange pool, 0, -1
       proxies.each_with_object(status) do |proxy,info|
         public_address = db.get("#{proxy}:goes_as")
+        started_at = db.get("#{proxy}:registered_at").to_i
+        restarted_at = Time.at(started_at)
+
+        hosts = Hash[*db.keys("#{proxy}:since:#{started_at}:*:requests").map do |key|
+          [ $1, db.get(key).to_i ] if key =~ %r{#{proxy}:since:#{started_at}:(.+):requests}
+        end.compact.flatten]
+
         info[proxy] = {
           public_address: public_address,
-          group: group
+          pool: pool,
+          restarted_at: "#{restarted_at} (#{Time.current.to_i - started_at} seconds ago)",
+          stats: {
+            total: {
+              requests: db.get("#{proxy}:requests").to_i,
+            },
+            since_last_restart: {
+              total: db.get("#{proxy}:since:#{started_at}:requests").to_i,
+              hosts: hosts
+            }
+          }
+
         }
       end
     end

@@ -20,25 +20,26 @@ class CLI < Thor
       pool.gsub!(/^pools:/,'')
       proxies = db.lrange pool, 0, -1
       proxies.each_with_object(status) do |proxy,info|
-        public_address = db.get("#{proxy}:goes_as")
+        public_address, started_at = *db.mget("#{proxy}:goes_as", "#{proxy}:registered_at")
         next if public_address.nil?
-        started_at = db.get("#{proxy}:registered_at").to_i
-        restarted_at = Time.at(started_at)
+        restarted_at = Time.at(started_at.to_i)
 
-        hosts = Hash[*db.keys("#{proxy}:since:#{started_at}:*:requests").map do |key|
-          [ $1, db.get(key).to_i ] if key =~ %r{#{proxy}:since:#{started_at}:(.+):requests}
-        end.compact.flatten]
+        requests_keys = db.keys("#{proxy}:since:#{started_at}:*:requests")
+        hosts = requests_keys.present? ? Hash[*requests_keys.zip(db.mget(requests_keys)).map do |(key, value)|
+          [ $1, value.to_i ] if key =~ %r{#{proxy}:since:#{started_at}:(.+):requests}
+        end.compact.flatten] : {}
 
+        total_requests, request_since_last_restarted = *db.mget("#{proxy}:requests", "#{proxy}:since:#{started_at}:requests")
         info[proxy] = {
           public_address: public_address,
           pool: pool,
-          restarted_at: "#{restarted_at} (#{Time.current.to_i - started_at} seconds ago)",
+          restarted_at: "#{restarted_at} (#{Time.current.to_i - started_at.to_i} seconds ago)",
           stats: {
             total: {
-              requests: db.get("#{proxy}:requests").to_i,
+              requests: total_requests.to_i,
             },
             since_last_restart: {
-              total: db.get("#{proxy}:since:#{started_at}:requests").to_i,
+              total: request_since_last_restarted.to_i,
               hosts: hosts
             }
           }

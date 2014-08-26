@@ -12,15 +12,46 @@ And then execute:
 
     $ bundle
 
+## Configuration
+  You need to provide a redis database
+
+``ruby
+  MT::Proxy.redis = "redis://127.0.0.1/2"
+
+  MT::Proxy.redis = Redis.new(url: "redis://127.0.0.1/2")
+
 
 ## Usage
 
-TODO: Write usage instructions here
+### Picking up a proxy
 
-## Contributing
+  MT::Proxy.pick pool: 'default'
+  => returns a URI of a proxy from in the given pool
 
-1. Fork it ( http://github.com/<my-github-username>/proxy_chooser/fork )
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+### Picking up a proxy with persitance
+eq a previous request has been made and we want to get the same public ip
+
+  MT::Proxy.pick_for pool: 'default', context: 'bah blah blah'
+  => returns a URI of a proxy from in the given pool
+
+the context can be any object that can be serialized in a json or a unique hash key
+
+
+### Setting up limits
+
+  MT::Proxy.set_limit "yahoo.com", 90
+
+The proxy will forward 90 request to the given domain after that will trigger a restart
+
+  MT::Proxy.unset_limit "yahoo.com"
+
+removes the  limit for yahoo.com
+
+  MT::Proxy.limits
+
+returns a hash with the current known limits { "hostname" => limit }
+
+  MT::Proxy.limit "yahoo.com"
+
+returns the limit for the given hostname
+

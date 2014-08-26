@@ -118,12 +118,49 @@ module MT
       new_association_for(key, options)
     end
 
+    def limits
+      keys = redis.keys("limits:*")
+      unless keys.empty?
+        Hash[*keys.zip(redis.mget(*keys)).map do |(key, limit)|
+          [ key.gsub(%r{limits:},''), limit.to_i ]
+        end.flatten]
+      else
+        {}
+      end
+    end
+
+    #sets a limit for a given hostname
+    #
+    # MT::Proxy.set_limit "yahoo.com", 90
+    #
+    #only 90 proxy requests for yahoo.com after that a restart is triggered
+    def set_limit(hostname, requests=nil)
+      redis.set "limits:#{hostname}", requests if requests
+    end
+
+    #removes a limit for a given hostname
+    # MT::Proxy.unset_limit "yahoo.com", 90
+    def unset_limit(hostname)
+      redis.del "limits:#{hostname}"
+    end
+
+    #gets the limit for a given hostname
+    #
+    #  MT::Proxy.set_limit "yahoo.com", 90
+    #  MT::Proxy.limit "yahoo.com" => 90
+    #
+    def limit(hostname)
+      limit = redis.get("limits:#{hostname}").to_i
+      limit = 1.0 /0 if limit == 0 # Infinity
+      limit
+    end
+
     # Registers a proxy
     def register(address_with_port, public_ip)
       renew(address_with_port, public_ip)
       redis.lrem(pool, 0, address_with_port)
       redis.lpush(pool, address_with_port)
-      guard_time = (check_interval * 1.5).round
+      guard_time = (check_interval * 3).round
       redis.setex("pools:#{pool}", guard_time, pool )
       redis.set("#{address_with_port}:registered_at", Time.now.to_i)
     end
@@ -131,7 +168,7 @@ module MT
     # Renew a proxy
     # This method also sets an expiration time so if no renewal is made in until the expiration deadline the proxy is removed from the pool
     def renew(address_with_port, public_ip)
-      guard_time = (check_interval * 1.5).round
+      guard_time = (check_interval * 3).round
       redis.setex("#{address_with_port}:goes_as", guard_time, public_ip)
       redis.setex("pools:#{pool}", guard_time, pool )
       redis.setex("#{public_ip}:via", guard_time, address_with_port)

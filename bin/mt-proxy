@@ -21,6 +21,7 @@ class CLI < Thor
       proxies = db.lrange pool, 0, -1
       proxies.each_with_object(status) do |proxy,info|
         public_address = db.get("#{proxy}:goes_as")
+        next if public_address.nil?
         started_at = db.get("#{proxy}:registered_at").to_i
         restarted_at = Time.at(started_at)
 
@@ -53,6 +54,35 @@ class CLI < Thor
   def console
     db = redis
     pry MT::Proxy
+  end
+
+  desc "limits", "manage limits"
+  method_option :redis, type: :string, default: 'redis://127.0.0.1:6379', desc: "redis server"
+  method_option :set, type: :string, desc: "the hostname"
+  method_option :unset, type: :string, desc: "the hostname"
+  method_option :requests, type: :numeric, desc: "number of requests"
+
+  def limits
+    if options[:set]
+      requests = options[:requests].to_i
+      if requests == 0
+        puts "Number of requests must be > 0"
+        return
+      end
+      redis.set "limits:#{options[:set]}", requests
+      return
+    end
+
+    redis.del "limits:#{options[:unset]}" and return if options[:unset]
+    require 'pp'
+    keys = redis.keys "limits:*"
+    unless keys.empty?
+      limits = Hash[*keys.zip(redis.mget(keys)).map do |(key, limit)|
+        [ key.gsub(%r{limits:},''), limit ]
+      end.flatten]
+      puts limits.to_json
+    end
+
   end
 
 

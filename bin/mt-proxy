@@ -102,6 +102,7 @@ class CLI < Thor
   method_option :pool, type: :string, desc: "pool name", default: MT::Proxy.pool
 
   def limits
+    db = redis
     if options[:set]
       requests = options[:requests].to_i
       if requests == 0

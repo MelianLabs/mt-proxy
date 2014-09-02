@@ -159,12 +159,12 @@ describe MT::Proxy do
   describe "limits"  do
 
     it "should set a limit" do
-      expect { MT::Proxy.set_limit  "example.host", 90 }.to change{ cache["#{namespace}:limits:example.host"] }.to("90")
+      expect { MT::Proxy.set_limit  "example.host", 90 }.to change{ cache["#{namespace}:limits:#{MT::Proxy.pool}:example.host"] }.to("90")
     end
 
     it "should unset a limit" do
       MT::Proxy.set_limit  "example.host", 90
-      expect { MT::Proxy.unset_limit  "example.host" }.to change{ cache["#{namespace}:limits:example.host"] }.to(nil)
+      expect { MT::Proxy.unset_limit  "example.host" }.to change{ cache["#{namespace}:limits:#{MT::Proxy.pool}:example.host"] }.to(nil)
     end
 
     it "should get the list of limits" do
@@ -176,7 +176,6 @@ describe MT::Proxy do
       MT::Proxy.set_limit  "example.host", 90
       expect(MT::Proxy.limit  "example.host").to eq(90)
     end
-
 
   end
 

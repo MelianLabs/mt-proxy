@@ -118,15 +118,18 @@ module MT
       new_association_for(key, options)
     end
 
-    def limits
-      keys = redis.keys("limits:*")
+    def limits(pool = nil)
+      pool ||= self.pool
+      limits = {}
+      keys = redis.keys("limits:#{pool}:*")
       unless keys.empty?
-        Hash[*keys.zip(redis.mget(*keys)).map do |(key, limit)|
-          [ key.gsub(%r{limits:},''), limit.to_i ]
-        end.flatten]
-      else
-        {}
+        keys.zip(redis.mget(*keys)).each_with_object(limits) do |(key, limit), limits|
+          key =~ /limits:([^:]+):(.*)/
+          host = $2
+          limits[host] = limit.to_i
+        end
       end
+      limits
     end
 
     #sets a limit for a given hostname
@@ -134,14 +137,16 @@ module MT
     # MT::Proxy.set_limit "yahoo.com", 90
     #
     #only 90 proxy requests for yahoo.com after that a restart is triggered
-    def set_limit(hostname, requests=nil)
-      redis.set "limits:#{hostname}", requests if requests
+    def set_limit(hostname, requests ,pool = nil)
+      pool ||= self.pool
+      redis.set "limits:#{pool}:#{hostname}", requests
     end
 
     #removes a limit for a given hostname
     # MT::Proxy.unset_limit "yahoo.com", 90
-    def unset_limit(hostname)
-      redis.del "limits:#{hostname}"
+    def unset_limit(hostname, pool = nil)
+      pool ||= self.pool
+      redis.del "limits:#{pool}:#{hostname}"
     end
 
     #gets the limit for a given hostname
@@ -149,8 +154,9 @@ module MT
     #  MT::Proxy.set_limit "yahoo.com", 90
     #  MT::Proxy.limit "yahoo.com" => 90
     #
-    def limit(hostname)
-      limit = redis.get("limits:#{hostname}").to_i
+    def limit(hostname, pool = nil)
+      pool ||= self.pool
+      limit = redis.get("limits:#{pool}:#{hostname}").to_i
       limit = 1.0 /0 if limit == 0 # Infinity
       limit
     end

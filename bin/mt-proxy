@@ -47,11 +47,12 @@ class CLI < Thor
 
   desc "status", "status of the proxy servers"
   method_option :redis, type: :string, default: 'redis://127.0.0.1:6379', desc: "redis server"
+  method_option :pool, type: :string,  desc: "pool"
 
   def status
     db = redis
     status = {}
-
+    require 'pp'
     redis.keys("pools:*").each do |pool|
       pool.gsub!(/^pools:/,'')
       proxies = db.lrange pool, 0, -1

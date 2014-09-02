@@ -99,6 +99,7 @@ class CLI < Thor
   method_option :set, type: :string, desc: "the hostname"
   method_option :unset, type: :string, desc: "the hostname"
   method_option :requests, type: :numeric, desc: "number of requests"
+  method_option :pool, type: :string, desc: "pool name", default: MT::Proxy.pool
 
   def limits
     if options[:set]
@@ -107,19 +108,16 @@ class CLI < Thor
         puts "Number of requests must be > 0"
         return
       end
-      redis.set "limits:#{options[:set]}", requests
+      MT::Proxy.set_limit options[:set], requests, options[:pool]
       return
     end
 
-    redis.del "limits:#{options[:unset]}" and return if options[:unset]
-    require 'pp'
-    keys = redis.keys "limits:*"
-    unless keys.empty?
-      limits = Hash[*keys.zip(redis.mget(keys)).map do |(key, limit)|
-        [ key.gsub(%r{limits:},''), limit ]
-      end.flatten]
-      puts limits.to_json
+    if options[:unset]
+      MT::Proxy.unset_limit options[:unset], options[:pool]
+      return
     end
+
+    puts JSON.pretty_generate(MT::Proxy.limits options[:pool])
 
   end
 

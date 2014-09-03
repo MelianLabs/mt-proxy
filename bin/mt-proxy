@@ -55,6 +55,7 @@ class CLI < Thor
     require 'pp'
     redis.keys("pools:*").each do |pool|
       pool.gsub!(/^pools:/,'')
+      next if options[:pool] and pool != options[:pool]
       proxies = db.lrange pool, 0, -1
       proxies.each_with_object(status) do |proxy,info|
         public_address, started_at = *db.mget("#{proxy}:goes_as", "#{proxy}:registered_at")

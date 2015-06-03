@@ -31,6 +31,10 @@ module MT
     mattr_accessor :association_ttl
     self.association_ttl = 3.minutes
 
+    #the default public_address for a proxy
+    mattr_accessor :public_address
+    self.public_address = nil
+
     mattr_accessor :check_interval
     self.check_interval = 10.seconds
 
@@ -81,7 +85,14 @@ module MT
       begin
 
         if proxy = redis.rpoplpush(pool, pool)
-          return URI.parse("http://#{proxy}") if redis.get("#{proxy}:goes_as")
+          proxy_uri = proxy
+          if public_address.present?
+            proxy_uri = proxy_uri.split(":")
+            proxy_uri[0] = public_address
+            proxy_uri = proxy_uri.join(":")
+          end
+
+          return URI.parse("http://#{proxy_uri}") if redis.get("#{proxy}:goes_as")
           redis.lrem pool, 0, proxy
         end
 

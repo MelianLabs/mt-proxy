@@ -45,6 +45,41 @@ class CLI < Thor
     puts JSON.pretty_generate(info)
   end
 
+  desc "check", "check status of the proxy servers"
+  method_option :redis, type: :string, default: 'redis://127.0.0.1:6379', desc: "redis server"
+  method_option :pool, type: :string,  desc: "pool"
+
+  def check
+    db = redis
+    status = {}
+    require 'pp'
+    limits = {
+      "default" => 1,
+      "vpn"     => 3
+    }
+
+    redis.keys("pools:*").each do |pool|
+      pool.gsub!(/^pools:/,'')
+      next if options[:pool] and pool != options[:pool]
+      proxies = db.lrange pool, 0, -1
+      count = 0
+      proxies_no = 0
+      loop do
+        count += 1
+        proxies_no = 0
+        proxies.each_with_object(status) do |proxy,info|
+          public_address, started_at = *db.mget("#{proxy}:goes_as", "#{proxy}:registered_at")
+          next if public_address.nil?
+          proxies_no += 1
+        end
+        break if limits[pool] <= proxies_no
+        break if count > 2
+        sleep 60
+      end
+      STDERR.puts "pool: #{pool} - #{proxies_no} instead of #{limits[pool]}" if limits[pool] > proxies_no
+    end    
+  end
+
   desc "status", "status of the proxy servers"
   method_option :redis, type: :string, default: 'redis://127.0.0.1:6379', desc: "redis server"
   method_option :pool, type: :string,  desc: "pool"

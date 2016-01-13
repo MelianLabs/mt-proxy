@@ -55,7 +55,8 @@ class CLI < Thor
     require 'pp'
     limits = {
       "default" => 1,
-      "vpn"     => 3
+      "vpn"     => 3,
+      "yelp"    => 1
     }
 
     redis.keys("pools:*").each do |pool|
@@ -72,7 +73,7 @@ class CLI < Thor
           next if public_address.nil?
           proxies_no += 1
         end
-        break if limits[pool] <= proxies_no
+        break if (limits[pool] || 0) <= proxies_no
         break if count > 2
         sleep 60
       end

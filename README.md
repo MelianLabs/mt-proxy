@@ -6,7 +6,7 @@
 
 Add this line to your application's Gemfile:
 
-    gem 'mt-proxy', github: 'vvlad/mt-proxy'
+    gem 'mt-proxy', github: 'MelianLabs/mt-proxy'
 
 And then execute:
 
